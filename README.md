@@ -56,21 +56,31 @@ The eStudy AI Assistant helps approximately 1,800 enrolled learners master their
 
 ## Environment Variables
 
-Set these variables in your local `.env` file for development:
+Configure these manually on the server or in your local environment before starting the app. None of these values should be hard-coded into frontend code or committed to the repository.
+
+Required for the application to run:
 
 ```env
-# Groq API key (server-side only)
+# Server-side only. Replace placeholders with your real values.
 GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL=openai/gpt-oss-20b
+TAVILY_API_KEY=your_tavily_api_key_here
 PORT=3000
 ```
 
-For Vercel, configure `GROQ_API_KEY` in the project's **Settings → Environment
-Variables** for each deployment environment, then redeploy. The local `.env`
-file is ignored by Git and is not uploaded. Keep the course DOCX files in
-`assets/knowledge base` tracked in Git; see
-[docs/INTEGRATION.md](./docs/INTEGRATION.md#deploying-on-vercel) for deployment
-checks.
+Optional but commonly used for local/browser access:
+
+```env
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5173
+```
+
+Notes:
+- Copy `.env.example` to `.env.local` or `.env` locally and fill in your own values.
+- Do not commit actual credentials.
+- The repository's `.gitignore` excludes real environment files.
+- On Vercel, configure the same variables in **Project Settings → Environment Variables** for each deployment environment and redeploy.
+
+Keep the course DOCX files in `assets/knowledge base` tracked in Git; see [docs/INTEGRATION.md](./docs/INTEGRATION.md#deploying-on-vercel) for deployment checks.
 
 ---
 

@@ -3,10 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Groq from 'groq-sdk';
-import { ESTUDY_SYSTEM_PROMPT } from './server/systemPrompt.js';
-import { getKnowledgeBaseStatus, retrieveKnowledge } from './server/knowledgeBase.js';
-import { summarizeModule } from './server/moduleSummary.js';
-import { getResponseStyleInstruction, normalizeResponseStyle } from './server/responseStyle.js';
+import { normalizeResponseStyle } from './server/responseStyle.js';
 
 // Load environment variables
 dotenv.config();
@@ -17,7 +14,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const DEFAULT_PORT = parseInt(process.env.PORT || '3001', 10);
-const PRIMARY_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
+const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim();
+const GROQ_MODEL = (process.env.GROQ_MODEL || 'openai/gpt-oss-20b').trim();
+const TAVILY_API_KEY = (process.env.TAVILY_API_KEY || '').trim();
+const PRIMARY_MODEL = GROQ_MODEL;
+const WEB_RESEARCH_SYSTEM_PROMPT = `You are an internet research assistant. Answer the learner's question using only the research results below and your best judgment about what is most credible. Synthesize and summarize the evidence, cite the most relevant sources in plain language, and clearly distinguish between confirmed facts and uncertain or weakly supported claims. If the search results do not support a reliable answer, say so clearly and explain what evidence was missing.`;
 
 // High-speed Groq models fallback chain
 const MODEL_FALLBACK_CHAIN = Array.from(new Set([
@@ -27,7 +28,72 @@ const MODEL_FALLBACK_CHAIN = Array.from(new Set([
   'qwen/qwen3.8-27b',
   'allam-2-7b'
 ]));
-let knowledgeBaseStatus = { moduleCount: 0, sectionCount: 0, modules: [] };
+const MAX_RESEARCH_RESULTS = 5;
+
+function normalizeResearchResults(results = []) {
+  const byUrl = new Map();
+  for (const result of results) {
+    const url = typeof result?.url === 'string' ? result.url.trim() : '';
+    if (!url) continue;
+    if (!byUrl.has(url)) {
+      byUrl.set(url, {
+        title: result?.title || 'Untitled source',
+        url,
+        content: String(result?.content || result?.snippet || '').trim(),
+        source: result?.source || new URL(url).hostname.replace(/^www\./, ''),
+        score: typeof result?.score === 'number' ? result.score : 0,
+        publishedDate: result?.published_date || result?.publishedDate || null
+      });
+    }
+  }
+  return Array.from(byUrl.values())
+    .filter((entry) => entry.content.length > 40)
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, MAX_RESEARCH_RESULTS);
+}
+
+async function searchWeb(query, limit = MAX_RESEARCH_RESULTS) {
+  if (!TAVILY_API_KEY) {
+    return { results: [], answer: '', error: 'TAVILY_API_KEY is not configured on the server.' };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: 'basic',
+        max_results: Math.min(limit, MAX_RESEARCH_RESULTS),
+        include_answer: true,
+        include_raw_content: false
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { results: [], answer: '', error: `Tavily request failed (${response.status}): ${errorText}` };
+    }
+
+    const data = await response.json();
+    const results = normalizeResearchResults(Array.isArray(data?.results) ? data.results : []);
+    return {
+      results,
+      answer: typeof data?.answer === 'string' ? data.answer.trim() : '',
+      error: results.length === 0 ? 'No reliable search results were found for this query.' : ''
+    };
+  } catch (error) {
+    const message = error?.name === 'AbortError' ? 'Tavily search timed out.' : error?.message || 'Unknown Tavily error.';
+    return { results: [], answer: '', error: message };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 // Parse JSON bodies
 app.use(express.json({ limit: '1mb' }));
@@ -84,11 +150,10 @@ function checkRateLimit(ip) {
 
 // Initialize Groq Client
 function getGroqClient() {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey || apiKey === 'MY_GROQ_API_KEY' || apiKey === 'your_groq_api_key_here' || apiKey.trim() === '') {
+  if (!GROQ_API_KEY || GROQ_API_KEY === 'MY_GROQ_API_KEY' || GROQ_API_KEY === 'your_groq_api_key_here') {
     return null;
   }
-  return new Groq({ apiKey: apiKey.trim() });
+  return new Groq({ apiKey: GROQ_API_KEY });
 }
 
 // Health Check Endpoint
@@ -97,17 +162,19 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
     assistant: 'AI BEE Champ / eStudy Learning Assistant',
-    provider: 'Groq',
+    provider: 'Groq + Tavily research',
     primaryModel: PRIMARY_MODEL,
     groqConfigured: hasApiKey,
-    knowledgeBase: { status: 'ready', ...knowledgeBaseStatus }
+    tavilyConfigured: Boolean(TAVILY_API_KEY),
+    researchMode: 'live-web-search',
+    knowledgeBase: { status: 'separate', activeForResearch: false }
   });
 });
 
-// POST /api/chat - Main Chat Endpoint with Groq LLM Engine
+// POST /api/chat - Main Chat Endpoint with live Tavily web research + Groq analysis
 app.post('/api/chat', async (req, res) => {
   const clientIp = req.ip || req.headers['x-forwarded-for'] || 'anonymous';
-  
+
   if (!checkRateLimit(clientIp)) {
     return res.status(429).json({
       success: false,
@@ -121,7 +188,7 @@ app.post('/api/chat', async (req, res) => {
     responseStyle: requestedResponseStyle,
     context = {},
     conversationHistory = []
-  } = req.body;
+  } = req.body || {};
   const responseStyle = normalizeResponseStyle(requestedResponseStyle);
 
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
@@ -131,45 +198,51 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 
-  // Sanitize message length
   const sanitizedMessage = message.trim().slice(0, 3000);
-
   const groq = getGroqClient();
+
   if (!groq) {
     return res.status(503).json({
       success: false,
-      error: 'The AI service is not configured. Set GROQ_API_KEY on the server to enable knowledge-based answers.',
-      groqConfigured: false
+      error: 'The AI service is not configured. Set GROQ_API_KEY on the server to enable web research answers.',
+      groqConfigured: false,
+      tavilyConfigured: Boolean(TAVILY_API_KEY)
     });
   }
 
-  // LMS metadata selects course material but is not a factual source.
-  let contextPrompt = '=== LMS TOPIC HINTS ===\n';
-  if (context.courseName || context.courseTitle) {
-    contextPrompt += `Course: ${context.courseName || context.courseTitle} (${context.courseId || 'N/A'})\n`;
+  if (!TAVILY_API_KEY) {
+    return res.status(503).json({
+      success: false,
+      error: 'The live web research service is not configured. Set TAVILY_API_KEY on the server to enable internet search.',
+      groqConfigured: true,
+      tavilyConfigured: false
+    });
   }
-  if (context.moduleName || context.moduleTitle) {
-    contextPrompt += `Module: ${context.moduleName || context.moduleTitle} (${context.moduleId || 'N/A'})\n`;
-  }
-  if (context.lessonTitle) {
-    contextPrompt += `Lesson: ${context.lessonTitle} (${context.lessonId || 'N/A'})\n`;
-  }
-  contextPrompt += '===============================\n\n';
-  const knowledge = await retrieveKnowledge(sanitizedMessage, {
-    ...context,
-    lessonDescription: undefined
-  }, conversationHistory);
-  const knowledgePrompt = knowledge.snippets.length > 0
-    ? knowledge.snippets.map((snippet) =>
-      `[Source: ${snippet.source}]\n${snippet.content}`
-    ).join('\n\n')
-    : 'No relevant excerpts were found in the Module 1–3 knowledge base.';
 
-  // 2. Build History (Limit to last 6 messages)
+  const research = await searchWeb(sanitizedMessage, 5);
+  if (research.error || research.results.length === 0) {
+    return res.status(503).json({
+      success: false,
+      error: research.error || 'No reliable live web sources were found for this question. Please try a more specific query.',
+      sources: [],
+      groqConfigured: true,
+      tavilyConfigured: true
+    });
+  }
+
+  const contextPrompt = [
+    '=== LEARNER CONTEXT ===',
+    context.courseName || context.courseTitle ? `Course: ${context.courseName || context.courseTitle}` : null,
+    context.moduleName || context.moduleTitle ? `Module: ${context.moduleName || context.moduleTitle}` : null,
+    context.lessonTitle ? `Lesson: ${context.lessonTitle}` : null,
+    '====================',
+    ''
+  ].filter(Boolean).join('\n');
+
   const recentHistory = Array.isArray(conversationHistory) ? conversationHistory.slice(-4) : [];
   const historyMessages = [];
   recentHistory.forEach((msg) => {
-    if (msg.sender && msg.content) {
+    if (msg?.sender && msg?.content) {
       historyMessages.push({
         role: msg.sender === 'user' || msg.role === 'learner' ? 'user' : 'assistant',
         content: String(msg.content).slice(0, 500)
@@ -177,92 +250,94 @@ app.post('/api/chat', async (req, res) => {
     }
   });
 
-  // 3. Build Action Instruction
+  const researchContext = research.results.map((result, index) => {
+    return [
+      `[Source ${index + 1}]`,
+      `Title: ${result.title}`,
+      `Website: ${result.source}`,
+      `URL: ${result.url}`,
+      `Summary: ${result.content}`
+    ].join('\n');
+  }).join('\n\n');
+
+  const styleInstruction = responseStyle === 'concise'
+    ? 'Keep the answer concise, direct, and easy to scan.'
+    : 'Provide a detailed but clear explanation with useful structure and practical context.';
+
   let actionInstruction = '';
   switch (actionType) {
     case 'explain':
-      actionInstruction = 'Provide a structured, easy-to-understand explanation using only the supplied knowledge-base excerpts. Use clear headings and bullet points. Never use LaTeX.';
+      actionInstruction = 'Explain the topic clearly using the research results below. Structure the answer with headings and key points. Never invent facts or claim certainty without support from the sources.';
       break;
     case 'simplify':
-      actionInstruction = 'Explain the key concept in plain, simple terms using only the supplied knowledge-base excerpts. Never use LaTeX.';
+      actionInstruction = 'Simplify the topic into plain language using only the research evidence below. Make it easy for a learner to understand without losing the key meaning.';
       break;
     case 'example':
-      actionInstruction = 'Give a practical example grounded in the supplied knowledge-base excerpts. Label illustrative details. Never use LaTeX.';
+      actionInstruction = 'Give a practical real-world example grounded in the research results below. Label illustrative examples clearly and avoid suggesting unsupported claims as fact.';
       break;
     case 'summarise':
-      actionInstruction = 'Provide a concise, bulleted summary of the relevant knowledge-base excerpts. Never use LaTeX.';
+      actionInstruction = 'Summarise the research results in concise bullet points. Focus on the strongest evidence and key takeaways.';
       break;
     case 'quiz':
-      actionInstruction = 'Create a 3 to 5 question quiz using ONLY the supplied knowledge-base excerpts. Return ONLY valid JSON with this exact shape: {"intro":"brief encouragement","questions":[{"id":"q1","question":"...","options":[{"id":"a","text":"..."},{"id":"b","text":"..."},{"id":"c","text":"..."},{"id":"d","text":"..."}],"correctAnswerId":"a","explanation":"...","tip":"..."}]}. Do not wrap in markdown quotes if possible, return strictly parseable JSON.';
+      actionInstruction = 'Create a 3 to 5 question quiz based only on the research results below. Return valid JSON with this exact structure: {"intro":"brief encouragement","questions":[{"id":"q1","question":"...","options":[{"id":"a","text":"..."},{"id":"b","text":"..."},{"id":"c","text":"..."},{"id":"d","text":"..."}],"correctAnswerId":"a","explanation":"...","tip":"..."}]}. Keep it parseable and grounded in the cited evidence.';
       break;
     case 'challenge':
-      actionInstruction = 'Create a practical learning challenge based only on the supplied knowledge-base excerpts.';
+      actionInstruction = 'Create a practical challenge or prompt that helps the learner apply the research findings in a realistic setting.';
       break;
     default:
-      actionInstruction = 'Answer using only the supplied knowledge-base excerpts. If they do not support an answer, say the provided modules do not cover it.';
-  }
-  if (knowledge.isModuleSummary) {
-    actionInstruction = 'Create a brief but comprehensive summary of the supplied module content, covering its major concepts and key takeaways. Never ask the learner to narrow the request. Never use LaTeX.';
+      actionInstruction = 'Answer the learner question using the research results below. Synthesize the strongest evidence, cite the relevant sources, and say clearly when the evidence is limited or uncertain.';
   }
 
-  // 4. Combine into User Prompt
-  const prompt = `${contextPrompt}KNOWLEDGE-BASE EXCERPTS:\n${knowledgePrompt}\n\nInstruction: ${actionInstruction}\nLearner Question/Prompt: "${sanitizedMessage}"`;
+  const prompt = [
+    contextPrompt,
+    '=== LIVE WEB RESEARCH ===',
+    researchContext,
+    '======================',
+    `Instruction: ${actionInstruction}`,
+    `Style: ${styleInstruction}`,
+    `Learner question: "${sanitizedMessage}"`,
+    'Please answer in a way that is grounded in the research, uses the source evidence responsibly, and does not rely on the old module files or eStudy documents.'
+  ].join('\n\n');
 
-  // 5. Call Groq Chat Completions API with fallback loop
   let lastError = null;
   let replyText = null;
 
-  if (knowledge.isModuleSummary) {
+  for (const targetModel of MODEL_FALLBACK_CHAIN) {
     try {
-      replyText = await summarizeModule(knowledge.snippets, groq, MODEL_FALLBACK_CHAIN, responseStyle);
+      console.log(`[Research Request] Attempting chat completion with model: ${targetModel}...`);
+      const response = await groq.chat.completions.create({
+        model: targetModel,
+        messages: [
+          { role: 'system', content: WEB_RESEARCH_SYSTEM_PROMPT },
+          { role: 'system', content: styleInstruction },
+          ...historyMessages,
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2,
+        max_tokens: actionType === 'quiz' ? 2048 : responseStyle === 'concise' ? 350 : 1800,
+        ...(targetModel.startsWith('openai/gpt-oss-') || targetModel.startsWith('qwen/qwen3.')
+          ? { reasoning_effort: 'low' }
+          : {})
+      }, { timeout: 45000 });
+
+      const candidate = response?.choices?.[0]?.message?.content;
+      if (candidate && candidate.trim()) {
+        replyText = candidate;
+        break;
+      }
     } catch (err) {
       lastError = err;
-    }
-  } else {
-    for (const targetModel of MODEL_FALLBACK_CHAIN) {
-      try {
-        console.log(`[Groq Request] Attempting chat completion with model: ${targetModel}...`);
-        const response = await groq.chat.completions.create({
-          model: targetModel,
-          messages: [
-            {
-              role: 'system',
-              content: ESTUDY_SYSTEM_PROMPT
-            },
-            {
-              role: 'system',
-              content: getResponseStyleInstruction(responseStyle, actionType)
-            },
-            ...historyMessages,
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.2,
-          max_tokens: actionType === 'quiz' ? 2048 : responseStyle === 'concise' ? 300 : 1600,
-          ...(targetModel.startsWith('openai/gpt-oss-') || targetModel.startsWith('qwen/qwen3.')
-            ? { reasoning_effort: 'low' }
-            : {})
-        }, { timeout: 45000 });
-
-        if (response && response.choices && response.choices[0]?.message?.content) {
-          replyText = response.choices[0].message.content;
-          console.log(`[Groq Request] Success with model: ${targetModel}`);
-          break;
-        }
-      } catch (err) {
-        lastError = err;
-        console.warn(`[Groq Request Warning] Model ${targetModel} error:`, err.message || err);
-      }
+      console.warn(`[Research Request Warning] Model ${targetModel} error:`, err?.message || err);
     }
   }
 
   if (!replyText) {
-    console.error('[Groq API Error]: All candidate models failed.', lastError?.message || lastError);
     return res.status(503).json({
       success: false,
-      error: `Groq service encountered an error: ${lastError?.message || 'High demand. Please try again.'}`
+      error: `Groq could not produce a research-based answer. ${lastError?.message || 'Please try again.'}`,
+      sources: research.results,
+      groqConfigured: true,
+      tavilyConfigured: true
     });
   }
 
@@ -273,24 +348,30 @@ app.post('/api/chat', async (req, res) => {
       const parsedQuiz = JSON.parse(jsonText);
       if (Array.isArray(parsedQuiz.questions) && parsedQuiz.questions.length > 0) {
         quizData = { questions: parsedQuiz.questions };
-        replyText = parsedQuiz.intro || `Let's test your understanding of ${context.lessonTitle || 'this lesson'}.`;
+        replyText = parsedQuiz.intro || `Let's test your understanding of ${context.lessonTitle || 'this topic'}.`;
       }
     } catch (err) {
-      console.warn('[Groq Quiz Warning] Model did not return valid quiz JSON:', err.message || err);
+      console.warn('[Groq Quiz Warning] Model did not return valid quiz JSON:', err?.message || err);
     }
   }
 
-  // Generate intelligent suggested next actions
   const suggestions = [
     'Explain in simple terms',
-    'Give a practical workplace example',
-    'Summarise key points'
+    'Give a practical example',
+    'Summarise the key findings'
   ];
+
+  const sourceList = research.results.map((result) => ({
+    title: result.title,
+    url: result.url,
+    source: result.source,
+    snippet: result.content
+  }));
 
   return res.json({
     success: true,
     message: {
-      id: `msg-groq-${Date.now()}`,
+      id: `msg-research-${Date.now()}`,
       sender: 'assistant',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       content: replyText,
@@ -298,6 +379,13 @@ app.post('/api/chat', async (req, res) => {
       contextLessonId: context.lessonId,
       contextLessonTitle: context.lessonTitle,
       suggestions,
+      sources: sourceList,
+      webResearch: {
+        used: true,
+        sourceCount: sourceList.length,
+        searchQuery: sanitizedMessage,
+        answer: research.answer || undefined
+      },
       ...(quizData ? { quizData } : {})
     },
     ...(quizData ? { quizData } : {})
@@ -353,12 +441,4 @@ function startServer(portToTry) {
   });
 }
 
-getKnowledgeBaseStatus()
-  .then((status) => {
-    knowledgeBaseStatus = status;
-    startServer(DEFAULT_PORT);
-  })
-  .catch((err) => {
-    console.error('Failed to load knowledge base:', err);
-    process.exitCode = 1;
-  });
+startServer(DEFAULT_PORT);

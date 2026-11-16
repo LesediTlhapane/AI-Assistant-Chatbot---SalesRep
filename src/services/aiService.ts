@@ -48,7 +48,7 @@ export class AiService {
       message: request.message,
       actionType: request.actionType || 'general',
       context: request.context,
-      responseStyle: request.responseStyle || 'detailed',
+      responseStyle: request.responseStyle || 'concise',
       conversationHistory: (request.conversationHistory || []).map((m) => ({
         sender: m.sender,
         content: m.content
@@ -121,7 +121,7 @@ export const aiService = {
     context: AssistantContext,
     actionType: QuickActionType = 'general',
     history: ChatMessage[] = [],
-    responseStyle: ResponseStyle = 'detailed'
+    responseStyle: ResponseStyle = 'concise'
   ): Promise<ChatMessage> {
     return AiService.sendMessage({
       message: query,

@@ -165,6 +165,31 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             </div>
           )}
 
+          {/* Live research sources */}
+          {!isUser && message.sources && message.sources.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-gray-100">
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-[#45CC42]/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#052B66]">
+                  Live web research
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {message.sources.slice(0, 3).map((source, idx) => (
+                  <a
+                    key={`${source.url}-${idx}`}
+                    href={source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-[10px] text-[#052B66] transition-colors hover:border-[#052B66]/40 hover:bg-[#052B66]/5"
+                  >
+                    <div className="font-semibold leading-snug">{source.title}</div>
+                    <div className="mt-0.5 text-gray-500">{source.source}</div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Timestamp & Actions */}
           <div className={`mt-2 pt-1.5 flex items-center justify-between text-[10px] ${
             isUser ? 'text-blue-200/80 border-t border-white/10' : 'text-gray-400 border-t border-gray-100'

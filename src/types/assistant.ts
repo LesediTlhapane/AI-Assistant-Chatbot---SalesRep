@@ -65,6 +65,13 @@ export interface ChallengeEvaluation {
   recommendedNextStep?: string;
 }
 
+export interface ResearchSource {
+  title: string;
+  url: string;
+  source: string;
+  snippet?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant' | 'system';
@@ -76,6 +83,13 @@ export interface ChatMessage {
   contextLessonTitle?: string;
   suggestions?: string[];
   actions?: string[];
+  sources?: ResearchSource[];
+  webResearch?: {
+    used?: boolean;
+    sourceCount?: number;
+    searchQuery?: string;
+    answer?: string;
+  };
   quizData?: {
     questions: QuizQuestion[];
     currentQuestionIndex: number;

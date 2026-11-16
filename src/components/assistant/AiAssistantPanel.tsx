@@ -101,12 +101,15 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
 
   // Internal state when not externally controlled
   const [internalMessages, setInternalMessages] = useState<ChatMessage[]>(initialMessages);
+  const [localPromptMessages, setLocalPromptMessages] = useState<ChatMessage[]>([]);
+  const [pendingTopicAction, setPendingTopicAction] = useState<QuickActionType | null>(null);
   const [isInternallyThinking, setIsInternallyThinking] = useState(false);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [responseStyle, setResponseStyle] = useState<ResponseStyle>(() =>
-    localStorage.getItem('estudy-assistant-response-style') === 'concise' ? 'concise' : 'detailed'
-  );
+  const [responseStyle, setResponseStyle] = useState<ResponseStyle>(() => {
+    const saved = localStorage.getItem('estudy-assistant-response-style');
+    return saved === 'concise' || saved === 'detailed' ? saved : 'concise';
+  });
   const [theme, setTheme] = useState<'light' | 'dark'>(() =>
     localStorage.getItem('estudy-assistant-theme') === 'dark' ? 'dark' : 'light'
   );
@@ -121,13 +124,19 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   }, [responseStyle]);
 
   const isControlled = externalMessages !== undefined && externalSendMessage !== undefined;
-  const messages = isControlled ? externalMessages : internalMessages;
+  const messages = isControlled
+    ? [...externalMessages, ...localPromptMessages]
+    : internalMessages;
   const isThinking = externalThinking ?? isInternallyThinking;
   const hasMessages = messages.length > 0;
 
   const handleSendMessage = async (query: string, actionType: QuickActionType = 'general') => {
+    const effectiveActionType = pendingTopicAction || actionType;
+    setPendingTopicAction(null);
+    setLocalPromptMessages([]);
+
     if (isControlled && externalSendMessage) {
-      externalSendMessage(query, actionType, responseStyle);
+      externalSendMessage(query, effectiveActionType, responseStyle);
       return;
     }
 
@@ -139,7 +148,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
       role: 'learner',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       content: query,
-      actionType,
+      actionType: effectiveActionType,
       contextLessonId: activeContext.lessonId,
       contextLessonTitle: activeContext.lessonTitle
     };
@@ -152,7 +161,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
       const assistantMsg = await aiService.sendMessage(
         query,
         activeContext,
-        actionType,
+        effectiveActionType,
         [...internalMessages, userMsg],
         responseStyle
       );
@@ -176,6 +185,8 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
 
   const handleResetConversation = () => {
     setInternalMessages([]);
+    setLocalPromptMessages([]);
+    setPendingTopicAction(null);
     setErrorMessage(null);
     onResetConversation?.();
     if ('speechSynthesis' in window) {
@@ -184,6 +195,37 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   };
 
   const handleActionSelect = (actionType: QuickActionType, promptText?: string) => {
+    const hasTopicContext = Boolean(
+      activeContext.lessonTitle || activeContext.moduleName || activeContext.moduleTitle
+    );
+    const hasLearnerTopic = messages.some((message) => message.sender === 'user' && message.content.trim());
+
+    if (!hasTopicContext && !hasLearnerTopic) {
+      setPendingTopicAction(actionType);
+      const actionLabel: Record<QuickActionType, string> = {
+        explain: 'explain',
+        simplify: 'simplify',
+        example: 'give an example for',
+        summarise: 'summarise',
+        quiz: 'create a quiz about',
+        challenge: 'create a challenge about',
+        general: 'help you with'
+      };
+      const clarification: ChatMessage = {
+        id: `topic-prompt-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        content: `What topic would you like me to ${actionLabel[actionType]}? Type the topic below and I’ll get started.`
+      };
+
+      if (isControlled) {
+        setLocalPromptMessages([clarification]);
+      } else {
+        setInternalMessages((previous) => [...previous, clarification]);
+      }
+      return;
+    }
+
     let query = promptText;
     if (!query) {
       switch (actionType) {
@@ -277,7 +319,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
 
       {/* 5. Fixed Chat Input */}
       <ChatInput
-        onSendMessage={(text) => handleSendMessage(text, 'general')}
+        onSendMessage={(text) => handleSendMessage(text, pendingTopicAction || 'general')}
         disabled={false}
         isThinking={isThinking}
         lessonTitle={activeContext.lessonTitle}
