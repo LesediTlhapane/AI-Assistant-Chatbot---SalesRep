@@ -51,7 +51,8 @@ export const EmbedApp: React.FC = () => {
   const handleSendMessage = async (
     query: string,
     actionType: QuickActionType = 'general',
-    responseStyle: ResponseStyle = 'detailed'
+    responseStyle: ResponseStyle = 'concise',
+    topic?: string
   ) => {
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -68,6 +69,7 @@ export const EmbedApp: React.FC = () => {
         message: query,
         actionType,
         responseStyle,
+        topic,
         context,
         conversationHistory: messages
       });

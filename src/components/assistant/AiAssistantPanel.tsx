@@ -39,7 +39,7 @@ export interface AiAssistantPanelProps {
   /**
    * Controlled message handler (optional)
    */
-  onSendMessage?: (query: string, actionType?: QuickActionType, responseStyle?: ResponseStyle) => void;
+  onSendMessage?: (query: string, actionType?: QuickActionType, responseStyle?: ResponseStyle, topic?: string) => void;
 
   /**
    * Whether the panel is being rendered in full screen / mobile drawer
@@ -103,6 +103,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   const [internalMessages, setInternalMessages] = useState<ChatMessage[]>(initialMessages);
   const [localPromptMessages, setLocalPromptMessages] = useState<ChatMessage[]>([]);
   const [pendingTopicAction, setPendingTopicAction] = useState<QuickActionType | null>(null);
+  const [activeTopic, setActiveTopic] = useState('');
   const [isInternallyThinking, setIsInternallyThinking] = useState(false);
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -127,16 +128,29 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   const messages = isControlled
     ? [...externalMessages, ...localPromptMessages]
     : internalMessages;
+  const conversationTopic = activeTopic
+    || activeContext.lessonTitle
+    || activeContext.moduleName
+    || activeContext.moduleTitle
+    || [...messages].reverse().find((message) => message.sender === 'user' && message.content.trim())?.content
+    || '';
+
+  React.useEffect(() => {
+    const contextTopic = activeContext.lessonTitle || activeContext.moduleName || activeContext.moduleTitle;
+    if (contextTopic) setActiveTopic(contextTopic);
+  }, [activeContext.lessonTitle, activeContext.moduleName, activeContext.moduleTitle]);
   const isThinking = externalThinking ?? isInternallyThinking;
   const hasMessages = messages.length > 0;
 
   const handleSendMessage = async (query: string, actionType: QuickActionType = 'general') => {
     const effectiveActionType = pendingTopicAction || actionType;
+    const topic = conversationTopic || query.trim();
+    setActiveTopic(topic);
     setPendingTopicAction(null);
     setLocalPromptMessages([]);
 
     if (isControlled && externalSendMessage) {
-      externalSendMessage(query, effectiveActionType, responseStyle);
+      externalSendMessage(query, effectiveActionType, responseStyle, topic);
       return;
     }
 
@@ -163,7 +177,8 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
         activeContext,
         effectiveActionType,
         [...internalMessages, userMsg],
-        responseStyle
+        responseStyle,
+        topic
       );
       setInternalMessages((prev) => [...prev, assistantMsg]);
 
@@ -187,6 +202,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
     setInternalMessages([]);
     setLocalPromptMessages([]);
     setPendingTopicAction(null);
+    setActiveTopic('');
     setErrorMessage(null);
     onResetConversation?.();
     if ('speechSynthesis' in window) {
@@ -195,9 +211,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   };
 
   const handleActionSelect = (actionType: QuickActionType, promptText?: string) => {
-    const hasTopicContext = Boolean(
-      activeContext.lessonTitle || activeContext.moduleName || activeContext.moduleTitle
-    );
+    const hasTopicContext = Boolean(conversationTopic);
     const hasLearnerTopic = messages.some((message) => message.sender === 'user' && message.content.trim());
 
     if (!hasTopicContext && !hasLearnerTopic) {
@@ -226,31 +240,19 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
       return;
     }
 
-    let query = promptText;
-    if (!query) {
-      switch (actionType) {
-        case 'explain':
-          query = `Explain ${activeContext.lessonTitle || 'this lesson'} in structured detail.`;
-          break;
-        case 'simplify':
-          query = `Simplify this lesson in plain, easy-to-understand terms.`;
-          break;
-        case 'example':
-          query = `Provide a real-world workplace example for ${activeContext.lessonTitle || 'this concept'}.`;
-          break;
-        case 'summarise':
-          query = `Summarise the key takeaways of ${activeContext.lessonTitle || 'this lesson'}.`;
-          break;
-        case 'quiz':
-          query = `Test my knowledge on ${activeContext.lessonTitle || 'this lesson'} with a 5-question quiz.`;
-          break;
-        case 'challenge':
-          query = `Start the practical workplace challenge for ${activeContext.lessonTitle || 'this lesson'}.`;
-          break;
-        default:
-          query = 'Help me understand this lesson.';
-      }
-    }
+    const topic = conversationTopic || activeContext.lessonTitle || activeContext.moduleTitle || 'the selected topic';
+    const actionPrompts: Record<QuickActionType, string> = {
+      explain: `Explain ${topic} in structured detail.`,
+      simplify: `Simplify ${topic} in plain, easy-to-understand terms.`,
+      example: `Give a practical example specifically about ${topic}.`,
+      summarise: `Summarise the key points about ${topic}.`,
+      quiz: `Test my knowledge of ${topic} with a 5-question quiz.`,
+      challenge: `Create a practical challenge about ${topic}.`,
+      general: `Help me understand ${topic}.`
+    };
+    const query = promptText
+      ? `${promptText} Focus only on this topic: ${topic}.`
+      : actionPrompts[actionType];
     handleSendMessage(query, actionType);
   };
 

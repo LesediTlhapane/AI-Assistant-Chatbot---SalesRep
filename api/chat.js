@@ -12,7 +12,7 @@ const MODELS = Array.from(new Set([
   'allam-2-7b'
 ]));
 
-const WEB_RESEARCH_SYSTEM_PROMPT = `You are an internet research assistant. Answer the learner's question using only the research results below and your best judgment about what is most credible. Synthesize and summarize the evidence, cite the most relevant sources in plain language, and clearly distinguish between confirmed facts and uncertain or weakly supported claims. If the search results do not support a reliable answer, say so clearly and explain what evidence was missing.`;
+const WEB_RESEARCH_SYSTEM_PROMPT = `You are an internet research assistant. The learner-selected topic is the scope of the conversation: stay focused on it and do not introduce a different topic. Answer the learner's question using only the research results below and your best judgment about what is most credible. Synthesize and summarize the evidence, cite the most relevant sources in plain language, and clearly distinguish between confirmed facts and uncertain or weakly supported claims. If the search results do not support a reliable answer, say so clearly and explain what evidence was missing.`;
 
 function normalizeSearchResults(results = []) {
   const byUrl = new Map();
@@ -93,6 +93,7 @@ export default async function handler(req, res) {
     message,
     actionType = 'general',
     responseStyle: requestedResponseStyle,
+    topic: requestedTopic,
     context = {},
     conversationHistory = [],
   } = req.body || {};
@@ -102,6 +103,9 @@ export default async function handler(req, res) {
       success: false,
       error: 'Please enter a question.',
     });
+  }
+  if (requestedTopic !== undefined && typeof requestedTopic !== 'string') {
+    return res.status(400).json({ success: false, error: 'Topic must be a string.' });
   }
 
   if (!apiKey || apiKey === 'your_groq_api_key_here' || apiKey.trim() === '') {
@@ -125,7 +129,13 @@ export default async function handler(req, res) {
   try {
     const responseStyle = normalizeResponseStyle(requestedResponseStyle);
     const sanitizedMessage = message.trim().slice(0, 3000);
-    const research = await searchWeb(sanitizedMessage, 5);
+    const topic = typeof requestedTopic === 'string'
+      ? requestedTopic.trim().slice(0, 200)
+      : '';
+    const researchQuery = topic && topic.toLowerCase() !== sanitizedMessage.toLowerCase()
+      ? `${topic}: ${sanitizedMessage}`
+      : sanitizedMessage;
+    const research = await searchWeb(researchQuery, 5);
 
     if (research.error || research.results.length === 0) {
       return res.status(503).json({
@@ -194,6 +204,7 @@ export default async function handler(req, res) {
       '=== LIVE WEB RESEARCH ===',
       researchContext,
       '======================',
+      `Learner-selected topic (stay focused on this topic; do not introduce a different topic): ${topic || safeContext.lessonTitle || safeContext.moduleName || safeContext.moduleTitle || sanitizedMessage}`,
       `Instruction: ${actionInstruction}`,
       `Style: ${styleInstruction}`,
       `Learner question: "${sanitizedMessage}"`,
@@ -274,7 +285,7 @@ export default async function handler(req, res) {
         webResearch: {
           used: true,
           sourceCount: sourceList.length,
-          searchQuery: sanitizedMessage,
+          searchQuery: researchQuery,
           answer: research.answer || undefined,
         },
         ...(quizData ? { quizData } : {})

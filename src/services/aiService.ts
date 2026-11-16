@@ -16,6 +16,7 @@ export interface ChatApiRequest {
   context?: CrossKnowledgeContext | AssistantContext;
   conversationHistory?: ChatMessage[];
   responseStyle?: ResponseStyle;
+  topic?: string;
 }
 
 export interface ChatApiResponse {
@@ -49,6 +50,7 @@ export class AiService {
       actionType: request.actionType || 'general',
       context: request.context,
       responseStyle: request.responseStyle || 'concise',
+      topic: request.topic,
       conversationHistory: (request.conversationHistory || []).map((m) => ({
         sender: m.sender,
         content: m.content
@@ -121,14 +123,16 @@ export const aiService = {
     context: AssistantContext,
     actionType: QuickActionType = 'general',
     history: ChatMessage[] = [],
-    responseStyle: ResponseStyle = 'concise'
+    responseStyle: ResponseStyle = 'concise',
+    topic?: string
   ): Promise<ChatMessage> {
     return AiService.sendMessage({
       message: query,
       actionType,
       context,
       conversationHistory: history,
-      responseStyle
+      responseStyle,
+      topic
     });
   },
 

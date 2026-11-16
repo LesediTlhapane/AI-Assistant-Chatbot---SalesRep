@@ -18,7 +18,7 @@ const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim();
 const GROQ_MODEL = (process.env.GROQ_MODEL || 'openai/gpt-oss-20b').trim();
 const TAVILY_API_KEY = (process.env.TAVILY_API_KEY || '').trim();
 const PRIMARY_MODEL = GROQ_MODEL;
-const WEB_RESEARCH_SYSTEM_PROMPT = `You are an internet research assistant. Answer the learner's question using only the research results below and your best judgment about what is most credible. Synthesize and summarize the evidence, cite the most relevant sources in plain language, and clearly distinguish between confirmed facts and uncertain or weakly supported claims. If the search results do not support a reliable answer, say so clearly and explain what evidence was missing.`;
+const WEB_RESEARCH_SYSTEM_PROMPT = `You are an internet research assistant. The learner-selected topic is the scope of the conversation: stay focused on it and do not introduce a different topic. Answer the learner's question using only the research results below and your best judgment about what is most credible. Synthesize and summarize the evidence, cite the most relevant sources in plain language, and clearly distinguish between confirmed facts and uncertain or weakly supported claims. If the search results do not support a reliable answer, say so clearly and explain what evidence was missing.`;
 
 // High-speed Groq models fallback chain
 const MODEL_FALLBACK_CHAIN = Array.from(new Set([
@@ -186,6 +186,7 @@ app.post('/api/chat', async (req, res) => {
     message,
     actionType = 'general',
     responseStyle: requestedResponseStyle,
+    topic: requestedTopic,
     context = {},
     conversationHistory = []
   } = req.body || {};
@@ -197,8 +198,18 @@ app.post('/api/chat', async (req, res) => {
       error: 'A valid message string is required.'
     });
   }
+  if (requestedTopic !== undefined && typeof requestedTopic !== 'string') {
+    return res.status(400).json({
+      success: false,
+      error: 'Topic must be a string.'
+    });
+  }
 
   const sanitizedMessage = message.trim().slice(0, 3000);
+  const topic = typeof requestedTopic === 'string' ? requestedTopic.trim().slice(0, 200) : '';
+  const researchQuery = topic && topic.toLowerCase() !== sanitizedMessage.toLowerCase()
+    ? `${topic}: ${sanitizedMessage}`
+    : sanitizedMessage;
   const groq = getGroqClient();
 
   if (!groq) {
@@ -219,7 +230,7 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 
-  const research = await searchWeb(sanitizedMessage, 5);
+  const research = await searchWeb(researchQuery, 5);
   if (research.error || research.results.length === 0) {
     return res.status(503).json({
       success: false,
@@ -293,6 +304,7 @@ app.post('/api/chat', async (req, res) => {
     '=== LIVE WEB RESEARCH ===',
     researchContext,
     '======================',
+    `Learner-selected topic (stay focused on this topic; do not introduce a different topic): ${topic || context.lessonTitle || context.moduleName || context.moduleTitle || sanitizedMessage}`,
     `Instruction: ${actionInstruction}`,
     `Style: ${styleInstruction}`,
     `Learner question: "${sanitizedMessage}"`,
@@ -383,7 +395,7 @@ app.post('/api/chat', async (req, res) => {
       webResearch: {
         used: true,
         sourceCount: sourceList.length,
-        searchQuery: sanitizedMessage,
+        searchQuery: researchQuery,
         answer: research.answer || undefined
       },
       ...(quizData ? { quizData } : {})
