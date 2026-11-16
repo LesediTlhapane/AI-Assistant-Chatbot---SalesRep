@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+}
+
+/* Custom subtle scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #E5E7EB;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #CBD5E1;
+}
+
+/* Hide scrollbar for clean horizontal action bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.ai-assistant-dark {
+  color: #e2e8f0;
+  background-color: #111827;
+  border-color: #334155;
+}
+
+.ai-assistant-dark .bg-white {
+  background-color: #1e293b;
+}
+
+.ai-assistant-dark .bg-gray-100,
+.ai-assistant-dark .bg-gray-200,
+.ai-assistant-dark [class~="bg-[#F5F7FA]"],
+.ai-assistant-dark [class~="bg-[#F5F7FA]/30"] {
+  background-color: #0f172a;
+}
+
+.ai-assistant-dark .border-gray-100,
+.ai-assistant-dark .border-gray-200,
+.ai-assistant-dark .border-gray-300,
+.ai-assistant-dark .border-gray-200\/80,
+.ai-assistant-dark .border-gray-200\/90 {
+  border-color: #334155;
+}
+
+.ai-assistant-dark .text-gray-900,
+.ai-assistant-dark .text-gray-800,
+.ai-assistant-dark .text-gray-700,
+.ai-assistant-dark .text-gray-600,
+.ai-assistant-dark .text-gray-500 {
+  color: #cbd5e1;
+}
+
+.ai-assistant-dark .text-gray-400 {
+  color: #94a3b8;
+}
+
+.ai-assistant-dark .text-\[\#101828\],
+.ai-assistant-dark .text-\[\#052B66\] {
+  color: #bfdbfe;
+}
+
+.ai-assistant-dark [class~="bg-[#052B66]/5"] {
+  background-color: rgb(59 130 246 / 15%);
+}
+
+.ai-assistant-dark .hover\:bg-gray-100:hover,
+.ai-assistant-dark .hover\:bg-gray-200\/60:hover {
+  background-color: #334155;
+}
+
+.ai-assistant-dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+}

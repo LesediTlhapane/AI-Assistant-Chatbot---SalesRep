@@ -1,0 +1,6 @@
+{
+  "name": "eStudy AI Learning Assistant",
+  "description": "Standalone, embeddable right-side AI Assistant component designed for seamless integration into CrossKnowledge LMS and eStudy courses, featuring contextual learning guidance, quick actions, knowledge checks, and Groq ultra-fast LLM inference.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
