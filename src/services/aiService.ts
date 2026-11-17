@@ -8,15 +8,16 @@ import {
 } from '../types';
 import { AssistantContext, QuickActionType, ResponseStyle } from '../types/assistant';
 import { CrossKnowledgeContext } from './crossKnowledgeService';
-import { AiSimulatorService } from './aiSimulator';
 
 export interface ChatApiRequest {
   message: string;
-  actionType?: 'explain' | 'simplify' | 'example' | 'summarise' | 'quiz' | 'challenge' | 'general';
+  actionType?: 'explain' | 'simplify' | 'example' | 'summarise' | 'quiz' | 'challenge' | 'challenge-evaluation' | 'general';
   context?: CrossKnowledgeContext | AssistantContext;
   conversationHistory?: ChatMessage[];
   responseStyle?: ResponseStyle;
   topic?: string;
+  challengeScenario?: ChallengeScenario;
+  challengeSubmission?: string;
 }
 
 export interface ChatApiResponse {
@@ -51,6 +52,8 @@ export class AiService {
       context: request.context,
       responseStyle: request.responseStyle || 'concise',
       topic: request.topic,
+      challengeScenario: request.challengeScenario,
+      challengeSubmission: request.challengeSubmission,
       conversationHistory: (request.conversationHistory || []).map((m) => ({
         sender: m.sender,
         content: m.content
@@ -86,7 +89,7 @@ export class AiService {
       }
     }
 
-    throw new Error(`Unable to get a knowledge-based AI response: ${lastError}`);
+    throw new Error(`Unable to get an AI response: ${lastError}`);
   }
 
   /**
@@ -99,16 +102,11 @@ export class AiService {
       };
     }
 
-    const lessonText = lesson.contentSections
-      ? lesson.contentSections.map((s) => `${s.title}: ${s.body.join(' ')}`).join('\n')
-      : lesson.description;
-
     return {
       moduleId: module?.id,
       moduleName: module?.title,
       lessonId: lesson.id,
       lessonTitle: lesson.title,
-      lessonContent: lessonText,
       learnerId
     };
   }
@@ -139,9 +137,19 @@ export const aiService = {
   async evaluateChallenge(
     submission: string,
     scenario: ChallengeScenario,
-    _context?: AssistantContext
+    context?: AssistantContext
   ): Promise<ChallengeEvaluation> {
-    // Evaluate workplace challenge
-    return AiSimulatorService.evaluateChallenge(submission, scenario as any);
+    const response = await AiService.sendMessage({
+      message: submission,
+      actionType: 'challenge-evaluation',
+      context,
+      topic: scenario.title,
+      challengeScenario: scenario,
+      challengeSubmission: submission
+    });
+    if (!response.challengeEvaluation) {
+      throw new Error('The assistant did not return a valid challenge evaluation.');
+    }
+    return response.challengeEvaluation;
   }
 };

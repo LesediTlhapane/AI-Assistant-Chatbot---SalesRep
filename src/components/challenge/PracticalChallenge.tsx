@@ -27,12 +27,14 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluation, setEvaluation] = useState<ChallengeEvaluation | null>(null);
   const [showConsiderations, setShowConsiderations] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userText.trim() || isEvaluating) return;
 
     setIsEvaluating(true);
+    setEvaluationError(null);
     try {
       const result = await aiService.evaluateChallenge(userText, scenario, {});
       setEvaluation(result);
@@ -44,6 +46,8 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
         });
       }
       if (onCompleted) onCompleted();
+    } catch (error) {
+      setEvaluationError(error instanceof Error ? error.message : 'Unable to evaluate this submission. Please try again.');
     } finally {
       setIsEvaluating(false);
     }
@@ -51,7 +55,7 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
 
   const handleInsertTemplate = () => {
     setUserText(
-      `1. Document Curation: Audit, deduplicate, and sanitize the 200 SOPs before ingesting into the knowledge base.\n2. Data Privacy (POPIA): Strip sensitive client/employee PII and ensure enterprise-level zero-data retention.\n3. 30-Day Metrics: Track query resolution speed, accuracy ratings, and staff adoption rates.`
+      `1. Understand the customer's needs, priorities, and constraints.\n2. Recommend a relevant solution and explain its value clearly.\n3. Agree on a practical next step and how success will be measured.`
     );
   };
 
@@ -185,6 +189,11 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
       ) : (
         /* Submission Form */
         <form onSubmit={handleSubmit} className="space-y-3">
+          {evaluationError && (
+            <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">
+              {evaluationError}
+            </p>
+          )}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label htmlFor="challenge-response" className="text-xs font-bold text-gray-700">
@@ -205,7 +214,7 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
               rows={4}
               value={userText}
               onChange={(e) => setUserText(e.target.value)}
-              placeholder="Draft your 3-step rollout plan here (document curation, data privacy & POPIA, 30-day KPIs)..."
+              placeholder="Draft your recommendation, explain its value, and suggest a clear next step..."
               className="w-full p-3 rounded-xl border border-gray-200 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#052B66]/20 focus:border-[#052B66] leading-relaxed resize-none"
             />
           </div>

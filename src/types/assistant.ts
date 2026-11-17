@@ -1,6 +1,5 @@
 /**
- * eStudy AI Assistant - TypeScript Types & Interfaces
- * Clean integration boundary for CrossKnowledge LMS and future Gemini Flash + RAG backend
+ * Sales representative assistant TypeScript types and integration interfaces.
  */
 
 export type QuickActionType =
@@ -26,8 +25,6 @@ export interface AssistantContext {
   moduleTitle?: string;
   lessonId?: string;
   lessonTitle?: string;
-  lessonDescription?: string;
-  lessonContent?: string | object;
   learnerId?: string;
   learnerName?: string;
   courseProgress?: number;
@@ -65,13 +62,6 @@ export interface ChallengeEvaluation {
   recommendedNextStep?: string;
 }
 
-export interface ResearchSource {
-  title: string;
-  url: string;
-  source: string;
-  snippet?: string;
-}
-
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant' | 'system';
@@ -83,13 +73,6 @@ export interface ChatMessage {
   contextLessonTitle?: string;
   suggestions?: string[];
   actions?: string[];
-  sources?: ResearchSource[];
-  webResearch?: {
-    used?: boolean;
-    sourceCount?: number;
-    searchQuery?: string;
-    answer?: string;
-  };
   quizData?: {
     questions: QuizQuestion[];
     currentQuestionIndex: number;
@@ -103,13 +86,13 @@ export interface ChatMessage {
     evaluation?: ChallengeEvaluation;
     isEvaluating?: boolean;
   };
+  challengeEvaluation?: ChallengeEvaluation;
   isError?: boolean;
 }
 
 /**
  * Service abstraction interface for AI communication.
- * In development, implemented by simulated local AI.
- * In production, will proxy to Google Gemini Flash + RAG knowledge retrieval backend.
+ * The application communicates with its server-side Groq integration.
  */
 export interface AIService {
   sendMessage(

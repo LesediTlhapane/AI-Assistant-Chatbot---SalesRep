@@ -122,14 +122,13 @@
 
     // Extract context from host page variables or DOM if available
     const hostContext = window.eStudyLmsContext || {
-      courseId: window.CROSSKNOWLEDGE_COURSE_ID || 'course-ck-01',
-      courseName: window.CROSSKNOWLEDGE_COURSE_NAME || document.title || 'CrossKnowledge Course',
-      moduleId: window.CROSSKNOWLEDGE_MODULE_ID || 'mod-01',
-      moduleName: window.CROSSKNOWLEDGE_MODULE_NAME || 'Current Module',
-      lessonId: window.CROSSKNOWLEDGE_LESSON_ID || 'lesson-01',
-      lessonTitle: window.CROSSKNOWLEDGE_LESSON_TITLE || 'Current Lesson',
-      lessonContent: window.CROSSKNOWLEDGE_LESSON_CONTENT || '',
-      learnerId: window.CROSSKNOWLEDGE_LEARNER_ID || 'learner-ck'
+      courseId: window.CROSSKNOWLEDGE_COURSE_ID,
+      courseName: window.CROSSKNOWLEDGE_COURSE_NAME,
+      moduleId: window.CROSSKNOWLEDGE_MODULE_ID,
+      moduleName: window.CROSSKNOWLEDGE_MODULE_NAME,
+      lessonId: window.CROSSKNOWLEDGE_LESSON_ID,
+      lessonTitle: window.CROSSKNOWLEDGE_LESSON_TITLE,
+      learnerId: window.CROSSKNOWLEDGE_LEARNER_ID
     };
 
     iframe.contentWindow.postMessage({

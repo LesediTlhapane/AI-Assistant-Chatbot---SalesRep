@@ -1,6 +1,6 @@
 {
-  "name": "eStudy AI Learning Assistant",
-  "description": "Standalone, embeddable right-side AI Assistant component designed for seamless integration into CrossKnowledge LMS and eStudy courses, featuring contextual learning guidance, quick actions, knowledge checks, and Groq ultra-fast LLM inference.",
+  "name": "Sales Representative AI Assistant",
+  "description": "Standalone, embeddable AI assistant for sales representatives, powered by Groq with conversation context, quizzes, and practical challenges.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": ["SERVER_SIDE_GROQ_CHAT"]
 }

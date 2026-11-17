@@ -130,10 +130,10 @@ export const SettingsModal = ({
           <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 space-y-1">
             <div className="flex items-center gap-1.5 font-bold">
               <Shield className="w-3.5 h-3.5 text-[#052B66]" />
-              <span>CrossKnowledge LMS Sync Active</span>
+              <span>Optional LMS Context</span>
             </div>
             <p className="text-[11px] text-blue-800/90 leading-relaxed">
-              The assistant dynamically shifts context as you navigate modules and lessons across your course.
+              Uses metadata the host LMS provides. Context updates only when the host sends an update.
             </p>
           </div>
 

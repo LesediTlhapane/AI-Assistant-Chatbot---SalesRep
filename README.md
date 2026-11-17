@@ -1,159 +1,58 @@
-# eStudy South Africa AI Learning Assistant
+# Sales Representative AI Assistant
 
-An enterprise LMS-ready AI Learning Assistant built for **eStudy South Africa**, powered by **Google Gemini 2.5 Flash** and designed for seamless embedding into **CrossKnowledge LMS**.
+A general-purpose AI assistant for sales representatives, powered by Groq. It can answer general and sales-related questions, explain concepts, provide examples, summarise information, create quizzes and practical challenges, and handle follow-up questions using the conversation history.
 
----
+The assistant uses Groq's pretrained model knowledge and context supplied in the conversation; no uploads are needed. It does not search the internet. For current market conditions, prices, or recent developments, it explains that it cannot independently verify live information.
 
-## 🎯 Purpose & Overview
+## Architecture
 
-The eStudy AI Assistant helps approximately 1,800 enrolled learners master their course material by providing:
-- Structured, clear explanations of complex lesson topics.
-- Simplified language with relatable South African workplace analogies.
-- Practical business and workplace application examples.
-- Executive summaries of lessons and modules.
-- Academic integrity guidance for self-assessments and quizzes.
-- Real-time lesson context awareness provided directly by CrossKnowledge LMS.
-
----
-
-## 🏗️ System Architecture
-
-```
-                 CrossKnowledge LMS
-                         │
-                  eStudy AI Widget (public/widget.js)
-                         │
-                  Floating "Ask AI" Button
-                         │
-                  Right-side Slide Drawer
-                         │
-                    Chatbot Iframe (/embed)
-                         │
-                         ▼
-             React Chatbot Frontend (Vite + TS)
-                         │
-                         ▼
-                 Node.js / Express Backend (server.js)
-                         │
-                 Context Builder & Safety Checks
-                         │
-                 Rate Limiter (30 req/min/IP)
-                         │
-                         ▼
-                Google Gemini 2.5 Flash API
+```text
+CrossKnowledge host page (optional)
+       │ postMessage context
+       ▼
+React + TypeScript chat interface
+       │ POST /api/chat
+       ▼
+Shared server-side Groq handler
+       │
+       ▼
+Groq Chat Completions API
 ```
 
----
+Both local Express servers and the Vercel `/api/chat` function use the same Groq handler in `server/groqAssistant.js`.
 
-## 🛠️ Technology Stack
+## Environment variables
 
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, Motion (Framer), Lucide Icons.
-- **Backend:** Node.js, Express, `@google/genai` (SDK v2.4.0), `dotenv`.
-- **AI Model:** Google Gemini 2.5 Flash (`gemini-2.5-flash`).
-- **Integration:** Embeddable iframe (`/embed`), JavaScript widget (`public/widget.js`), `postMessage` event listener.
+Configure these values manually in your local server environment or in the Vercel project settings:
 
----
+- `GROQ_API_KEY` — required; server-side Groq API key.
+- `GROQ_MODEL` — optional; defaults to `openai/gpt-oss-20b`.
+- `PORT` — optional for local server startup.
+- `ALLOWED_ORIGINS` — optional comma-separated origins for local Express CORS.
 
-## Environment Variables
+For local development, copy `.env.example` to `.env.local` and add your own values. Do not commit credentials or expose them through frontend variables. On Vercel, set `GROQ_API_KEY` and, if desired, `GROQ_MODEL` under **Project Settings → Environment Variables**.
 
-Configure these manually on the server or in your local environment before starting the app. None of these values should be hard-coded into frontend code or committed to the repository.
+`GET /api/health` reports the configured provider, model, and whether server-side Groq credentials are configured. This is a configuration check, not a live Groq connectivity test.
 
-Required for the application to run:
+## CrossKnowledge context
 
-```env
-# Server-side only. Replace placeholders with your real values.
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=openai/gpt-oss-20b
-TAVILY_API_KEY=your_tavily_api_key_here
-PORT=3000
-```
+CrossKnowledge embedding remains optional. The widget and iframe can receive course, lesson, or learner metadata through the `ESTUDY_CONTEXT` `postMessage` interface. This metadata can help frame a conversation but is not treated as verified evidence.
 
-Optional but commonly used for local/browser access:
+See [docs/INTEGRATION.md](./docs/INTEGRATION.md) for widget, iframe, and context examples. Deployment examples are in [docs/DEPLOYMENT_OPTIONS.md](./docs/DEPLOYMENT_OPTIONS.md).
 
-```env
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5173
-```
-
-Notes:
-- Copy `.env.example` to `.env.local` or `.env` locally and fill in your own values.
-- Do not commit actual credentials.
-- The repository's `.gitignore` excludes real environment files.
-- On Vercel, configure the same variables in **Project Settings → Environment Variables** for each deployment environment and redeploy.
-
-Keep the course DOCX files in `assets/knowledge base` tracked in Git; see [docs/INTEGRATION.md](./docs/INTEGRATION.md#deploying-on-vercel) for deployment checks.
-
----
-
-## 🚀 Local Development Setup
-
-### 1. Install Dependencies
+## Local development
 
 ```bash
 npm install
-```
-
-### 2. Start the Application
-
-```bash
 npm run dev
 ```
-*Starts the Express API and Vite frontend together. If the configured port is already in use, the server retries on the next port and prints the URL to use.*
 
-Open the URL printed in the terminal (normally `http://localhost:3000`) to use the AI chatbot. Lesson context is supplied by the host LMS when embedded; otherwise, the chatbot starts without mock course or learner data.
+The development server starts Express and Vite together. If the configured port is in use, it retries on the next port.
 
----
-
-## 🔌 CrossKnowledge LMS Integration
-
-Detailed integration instructions are available in [docs/INTEGRATION.md](file:///c:/Users/LesediTlhapane/OneDrive%20-%20BEE%20Analyst%20%28Pty%29%20Ltd/Desktop/AI-Assistant-Chatbot/docs/INTEGRATION.md).
-
-### Quick Summary:
-1. **JavaScript Widget Integration**:
-   ```html
-   <script src="https://your-chatbot-domain.com/widget.js" data-chatbot-url="https://your-chatbot-domain.com/embed" defer></script>
-   ```
-2. **Direct Iframe Embedding**:
-   ```html
-   <iframe src="https://your-chatbot-domain.com/embed" style="width: 100%; height: 600px; border: none;"></iframe>
-   ```
-3. **Dynamic Context via `postMessage`**:
-   ```js
-   iframeWindow.postMessage({
-     type: 'ESTUDY_CONTEXT',
-     payload: {
-       courseId: 'CK-101',
-       courseName: 'Leadership & Management',
-       moduleId: 'MOD-01',
-       moduleName: 'Strategic Planning',
-       lessonId: 'LESSON-01',
-       lessonTitle: 'Swot Analysis in SA Business',
-       lessonContent: '...',
-       learnerId: 'STUDENT-123'
-     }
-   }, '*');
-   ```
-
----
-
-## 🔒 Security Features
-
-- **Key Isolation**: Server-side API invocation prevents secret leakage.
-- **CORS Protection**: Origin validation restricts request origins.
-- **Rate Limiting**: In-memory sliding window rate limiting prevents API abuse (30 requests/minute per client IP).
-- **Origin Check**: `postMessage` event listener validates origin domains against `ALLOWED_ORIGINS`.
-- **Token Efficiency**: System context limits lesson content and history size per prompt.
-
----
-
-## 🧪 Verification & Build Commands
+## Validation
 
 ```bash
-# Typecheck
+npm test
 npm run lint
-
-# Build production bundle
 npm run build
-
-# Start production Express server
-npm run start
 ```

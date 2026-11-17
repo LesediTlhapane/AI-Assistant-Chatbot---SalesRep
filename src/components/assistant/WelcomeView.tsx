@@ -28,22 +28,22 @@ export const WelcomeView: React.FC<WelcomeViewProps> = ({
             <h3 className="text-sm sm:text-base font-bold text-[#101828]">
               Hi {learnerName || 'there'} 👋
             </h3>
-            <p className="text-[11px] text-gray-500 font-medium">Your learning companion</p>
+            <p className="text-[11px] text-gray-500 font-medium">Your sales support assistant</p>
           </div>
         </div>
 
         {/* Current topic context */}
         {lessonTitle && (
           <div className="bg-[#052B66]/5 rounded-xl p-3 border border-[#052B66]/10">
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Currently studying</p>
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Current topic</p>
             <p className="text-xs sm:text-sm font-bold text-[#052B66] leading-snug">{lessonTitle}</p>
           </div>
         )}
 
         <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
           {lessonTitle
-            ? 'Ask me anything about this topic — I can explain concepts, give examples, simplify ideas, or quiz you.'
-            : 'Ask me anything — I can explain concepts, give examples, simplify ideas, or quiz you.'}
+            ? 'Ask me about this topic, sales situations, products, or problem-solving. I can explain, give examples, summarise, or quiz you.'
+            : 'Ask me about sales, products, communication, problem-solving, or anything else. I can explain, give examples, summarise, or quiz you.'}
         </p>
 
         <div className="pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">

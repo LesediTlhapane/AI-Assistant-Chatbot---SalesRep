@@ -1,179 +1,71 @@
-# eStudy South Africa AI Assistant - CrossKnowledge LMS Integration Guide
+# CrossKnowledge LMS Integration
 
-This guide details how **eStudy South Africa** and **CrossKnowledge LMS** administrators and developers can embed the eStudy AI Assistant into CrossKnowledge course pages.
+The Sales Representative AI Assistant can run as a standalone page or be embedded in a CrossKnowledge page. LMS integration is optional; the assistant itself is a general-purpose Groq-powered chatbot.
 
----
+## Floating widget
 
-## 🏗️ Architecture Overview
-
-```
-                      CrossKnowledge LMS Host Page
-                                   │
-                                   ▼
-                       eStudy AI Widget (widget.js)
-                                   │
-                       Floating Chat Bubble Button
-                                   │
-                         Right-side Slide Drawer
-                                   │
-                        Chatbot Iframe (/embed)
-                                   │
-                        window.postMessage()
-                     (Course & Learner Context)
-                                   │
-                                   ▼
-                        React Chatbot UI Bundle
-                                   │
-                     POST /api/chat (HTTPS API)
-                                   │
-                         Node.js / Express
-                                   │
-                      Groq Chat Completions
-```
-
----
-
-## 🔌 Integration Method 1: JavaScript Widget (Recommended)
-
-The simplest and most seamless way to add the AI assistant to CrossKnowledge is by including the `widget.js` script tag in your CrossKnowledge course player template or page header.
-
-### 1. Include Script Tag
-
-Add the following tag to your CrossKnowledge page HTML:
+Add the widget script to the host page:
 
 ```html
-<script 
-  src="https://your-ai-assistant-domain.com/widget.js" 
-  data-chatbot-url="https://your-ai-assistant-domain.com/embed" 
+<script
+  src="https://estudy-chatbot-salesrep.vercel.app/widget.js"
+  data-chatbot-url="https://estudy-chatbot-salesrep.vercel.app/embed"
   defer>
 </script>
 ```
 
-### 2. Supply Learner & Course Context (Optional / Automatic)
+The host page must permit custom JavaScript. The widget opens the assistant in a side panel.
 
-Define the global context on the CrossKnowledge page before or after loading the widget script:
-
-```html
-<script>
-  window.eStudyLmsContext = {
-    courseId: "CK-COURSE-101",
-    courseName: "Vocational Leadership & Management",
-    moduleId: "MOD-02",
-    moduleName: "Operational Decision Making",
-    lessonId: "LESSON-02-04",
-    lessonTitle: "Root Cause Analysis in Workplace Scenarios",
-    lessonContent: "Root Cause Analysis (RCA) is a systematic method used to identify the underlying causes of workplace breakdowns rather than just treating symptoms...",
-    learnerId: "STUDENT-98745",
-    learnerName: "Sibusiso Ndlovu",
-    learnerRole: "Team Leader",
-    organization: "eStudy South Africa"
-  };
-</script>
-```
-
-When the learner clicks the chat bubble, the widget automatically opens a right-side drawer and transmits the current context to the AI assistant using `postMessage` communication.
-
----
-
-## 🖼️ Integration Method 2: Direct Iframe Embedding
-
-If you prefer to embed the AI assistant directly inside a CrossKnowledge page container or tab without using the floating widget button, use the `/embed` route directly.
-
-### HTML Markup
+## Direct iframe
 
 ```html
 <iframe
-  src="https://ai-assistant-chatbot-flame.vercel.app/"
-  title="eStudy AI Learning Assistant"
+  id="salesrep-ai-iframe"
+  src="https://estudy-chatbot-salesrep.vercel.app/embed"
+  title="Sales Representative AI Assistant"
   style="width: 100%; height: 650px; border: 0; border-radius: 12px;"
   allow="microphone">
 </iframe>
 ```
 
----
+## Optional host context
 
-## 📨 Cross-Origin Context Communication via `postMessage`
-
-When the user navigates to a new lesson or module inside CrossKnowledge, you can update the AI assistant's context dynamically without reloading the iframe.
-
-### Host Page JavaScript Example
+The host may provide metadata to personalize the conversation. Updates are applied when the host sends a new message; the assistant does not detect LMS navigation on its own. Only send fields that are available and accurate.
 
 ```javascript
-const iframeWindow = document.getElementById('estudy-ai-iframe').contentWindow;
+const iframeWindow = document.getElementById('salesrep-ai-iframe').contentWindow;
 
-// Send updated context to the AI chatbot
 iframeWindow.postMessage({
   type: 'ESTUDY_CONTEXT',
   payload: {
-    courseId: "CK-COURSE-101",
-    courseName: "Vocational Leadership & Management",
-    moduleId: "MOD-03",
-    moduleName: "Performance Management",
-    lessonId: "LESSON-03-01",
-    lessonTitle: "Conducting KPI Reviews",
-    lessonContent: "Key Performance Indicators (KPIs) must be measurable, realistic, and aligned with company goals...",
-    learnerId: "STUDENT-98745"
+    courseName: 'Sales onboarding',
+    lessonTitle: 'Consultative selling',
+    learnerRole: 'Sales representative'
   }
-}, 'https://your-ai-assistant-domain.com');
+}, 'https://estudy-chatbot-salesrep.vercel.app');
 ```
 
-## 📚 Course Knowledge Base
+For the floating widget, the host may also call:
 
-The assistant uses the three course modules in `assets/knowledge base` as its
-authoritative source:
+```javascript
+window.eStudyAiWidget.updateContext({
+  courseName: 'Sales onboarding',
+  lessonTitle: 'Consultative selling',
+  learnerRole: 'Sales representative'
+});
+```
 
-- Module 1: Introduction to Artificial Intelligence
-- Module 2: AI Fundamentals — Key Concepts & Terminology
-- Module 3: Prompt Engineering
+Context is optional metadata that helps frame the conversation. It is not treated as verified evidence.
 
-The server extracts text from the `.docx` files and retrieves relevant sections
-for each question before sending them to Groq. The assistant is instructed to
-say when the supplied material does not support an answer. Include this folder
-and its documents in the deployment; the server loads them at startup. Restart
-the server after adding or replacing documents.
-When a learner asks for a summary of a specific module, the assistant receives
-representative sections sampled across that module and generates the overview
-in one model request to keep response times down.
-For short follow-up requests such as “Give me an example” or “Simplify this,”
-recent learner messages may guide module and topic retrieval; prior assistant
-responses are not treated as knowledge sources.
+## Server configuration
 
-The `/api/health` endpoint reports knowledge-base readiness, module count, and
-the number of searchable sections.
+Set `GROQ_API_KEY` on the server or in the Vercel project's **Settings → Environment Variables**. `GROQ_MODEL` is optional and defaults to `openai/gpt-oss-20b`. Do not put credentials in the host page, iframe URL, `postMessage` payload, or frontend environment variables.
 
-### Deploying on Vercel
+After deployment, check `/api/health` for the configured model and `groqConfigured` / `apiReady` status. This reports environment configuration only; it does not make a test request to Groq.
 
-The project includes a Vercel function at `/api/chat`. Add `GROQ_API_KEY` in
-the Vercel project's **Settings → Environment Variables** for each environment
-you deploy (Production, Preview, and/or Development), then redeploy. The local
-`.env` file is ignored by Git and is not uploaded to Vercel.
+## Security notes
 
-Keep the three `.docx` files in `assets/knowledge base` tracked in Git and
-included in the deployment. `vercel.json` configures these files to be bundled
-with the API functions. After deployment, open `/api/health` on the Vercel
-domain: the response should show `groqConfigured: true` and
-`knowledgeBase.status: "ready"` with three modules. If either check fails,
-review the Vercel function logs and project environment variables.
-
----
-
-## 🔒 Security & CORS Configuration
-
-1. **Origin Verification**: Configure allowed host origins on the chatbot server in `.env`:
-   ```env
-   ALLOWED_ORIGINS=https://estudy.crossknowledge.com,https://learning.estudy.co.za
-   ```
-2. **No Secret Exposure**: The `GROQ_API_KEY` remains strictly server-side and is never sent to the browser or passed through `postMessage`.
-3. **HTTPS Required**: Always host the chatbot backend on HTTPS in production to prevent mixed-content blocking in CrossKnowledge.
-
----
-
-## 🛠️ CrossKnowledge Information Checklist for Production
-
-Before final production rollout across 1,800 enrolled students, ensure the following parameters are aligned with eStudy South Africa:
-
-- [ ] Production domain for hosting the chatbot application.
-- [ ] Confirmed list of CrossKnowledge LMS domain origins for `ALLOWED_ORIGINS`.
-- [ ] Groq API Key configured in production environment variables (`GROQ_API_KEY`).
-- [ ] `assets/knowledge base` and its Module 1–3 documents included in the deployment.
-- [ ] CrossKnowledge learner token / SSO verification strategy if persistent learner history tracking is desired for Version 2.
+- Serve the assistant over HTTPS.
+- Restrict local Express CORS with `ALLOWED_ORIGINS` when needed.
+- The iframe `postMessage` sender should use the deployed assistant's exact origin rather than `*`.
+- Never include secrets or sensitive learner information in context metadata.

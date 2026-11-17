@@ -114,5 +114,6 @@ export interface ChatMessage {
     evaluation?: ChallengeEvaluation;
     isEvaluating?: boolean;
   };
+  challengeEvaluation?: ChallengeEvaluation;
   isError?: boolean;
 }

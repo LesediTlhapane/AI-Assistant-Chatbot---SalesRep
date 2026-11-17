@@ -92,7 +92,6 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
     moduleTitle: module?.title,
     lessonId: lesson?.id,
     lessonTitle: lesson?.title,
-    lessonDescription: lesson?.description,
     learnerId: learner?.id,
     learnerName: learner?.name,
     courseProgress: learner?.courseProgress,

@@ -56,6 +56,6 @@ responses, the LMS can send course and lesson context to the chatbot using the
 - Serve the chatbot over HTTPS.
 - Confirm the LMS permits the chosen script or iframe integration.
 - Configure the deployed chatbot server's allowed origins for the LMS domain.
-- Configure `GROQ_API_KEY`, `GROQ_MODEL`, and `TAVILY_API_KEY` in the Vercel
+- Configure `GROQ_API_KEY` and, optionally, `GROQ_MODEL` in the Vercel
   project's server-side environment variables. Never place API keys in LMS
   page code.
