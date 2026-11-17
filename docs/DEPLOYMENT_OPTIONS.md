@@ -2,6 +2,9 @@
 
 Hosted chatbot: [https://estudy-chatbot-salesrep.vercel.app/](https://estudy-chatbot-salesrep.vercel.app/)
 
+The `/embed` URL is routed to the chatbot page by `vercel.json`. Redeploy the
+project after applying that routing change before using the iframe or widget URLs below.
+
 ## 1. Webchat — Floating Bubble
 
 Add the widget script to the LMS page or site template where the floating
