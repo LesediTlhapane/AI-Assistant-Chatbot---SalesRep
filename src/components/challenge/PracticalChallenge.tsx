@@ -11,33 +11,36 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { ChallengeScenario, ChallengeEvaluation } from '../../types/assistant';
+import { ChatMessage, ChallengeScenario } from '../../types/assistant';
 import { aiService } from '../../services/aiService';
 
 interface PracticalChallengeProps {
-  scenario: ChallengeScenario;
+  data: NonNullable<ChatMessage['challengeData']>;
+  onChange: (data: NonNullable<ChatMessage['challengeData']>) => void;
   onCompleted?: () => void;
 }
 
 export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
-  scenario,
+  data,
+  onChange,
   onCompleted
 }) => {
-  const [userText, setUserText] = useState('');
+  const { scenario } = data;
   const [isEvaluating, setIsEvaluating] = useState(false);
-  const [evaluation, setEvaluation] = useState<ChallengeEvaluation | null>(null);
   const [showConsiderations, setShowConsiderations] = useState(false);
-  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  const userText = data.userSubmission || '';
+  const evaluation = data.evaluation;
+  const evaluationError = data.evaluationError;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userText.trim() || isEvaluating) return;
 
     setIsEvaluating(true);
-    setEvaluationError(null);
+    onChange({ ...data, evaluationError: undefined });
     try {
       const result = await aiService.evaluateChallenge(userText, scenario, {});
-      setEvaluation(result);
+      onChange({ ...data, evaluation: result, evaluationError: undefined });
       if (result.score >= 75) {
         confetti({
           particleCount: 40,
@@ -47,16 +50,21 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
       }
       if (onCompleted) onCompleted();
     } catch (error) {
-      setEvaluationError(error instanceof Error ? error.message : 'Unable to evaluate this submission. Please try again.');
+      onChange({
+        ...data,
+        evaluationError: error instanceof Error ? error.message : 'Unable to evaluate this submission. Please try again.'
+      });
     } finally {
       setIsEvaluating(false);
     }
   };
 
   const handleInsertTemplate = () => {
-    setUserText(
-      `1. Understand the customer's needs, priorities, and constraints.\n2. Recommend a relevant solution and explain its value clearly.\n3. Agree on a practical next step and how success will be measured.`
-    );
+    onChange({
+      ...data,
+      userSubmission: `1. Understand the customer's needs, priorities, and constraints.\n2. Recommend a relevant solution and explain its value clearly.\n3. Agree on a practical next step and how success will be measured.`,
+      evaluationError: undefined
+    });
   };
 
   return (
@@ -177,8 +185,12 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
           {/* Retry Button */}
           <button
             onClick={() => {
-              setEvaluation(null);
-              setUserText('');
+              onChange({
+                ...data,
+                evaluation: undefined,
+                userSubmission: '',
+                evaluationError: undefined
+              });
             }}
             className="w-full py-2 rounded-xl text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
           >
@@ -213,7 +225,12 @@ export const PracticalChallenge: React.FC<PracticalChallengeProps> = ({
               id="challenge-response"
               rows={4}
               value={userText}
-              onChange={(e) => setUserText(e.target.value)}
+              disabled={isEvaluating}
+              onChange={(e) => onChange({
+                ...data,
+                userSubmission: e.target.value,
+                evaluationError: undefined
+              })}
               placeholder="Draft your recommendation, explain its value, and suggest a clear next step..."
               className="w-full p-3 rounded-xl border border-gray-200 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#052B66]/20 focus:border-[#052B66] leading-relaxed resize-none"
             />

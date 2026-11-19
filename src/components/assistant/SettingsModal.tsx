@@ -139,7 +139,7 @@ export const SettingsModal = ({
 
           {/* Reset chat */}
           <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-gray-500">Reset Current Conversation:</span>
+            <span className="text-gray-500">Clear this conversation only:</span>
             <button
               onClick={() => {
                 onClearHistory();
@@ -148,7 +148,7 @@ export const SettingsModal = ({
               className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors flex items-center gap-1"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Clear Chat History
+              Clear Current Conversation
             </button>
           </div>
 

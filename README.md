@@ -4,6 +4,10 @@ A general-purpose AI assistant for sales representatives, powered by Groq. It ca
 
 The assistant uses Groq's pretrained model knowledge and context supplied in the conversation; no uploads are needed. It does not search the internet. For current market conditions, prices, or recent developments, it explains that it cannot independently verify live information.
 
+## Conversation history
+
+Conversation history is saved in this browser's local storage, including quiz answers and challenge drafts/results. It is restored when the chatbot is reopened on the same browser and origin. Use the conversation selector to return to an earlier conversation. **New conversation** starts a separate history; **Clear Current Conversation** only clears the selected conversation. Browser storage is not synced to other devices and can be removed by clearing site data.
+
 ## Architecture
 
 ```text

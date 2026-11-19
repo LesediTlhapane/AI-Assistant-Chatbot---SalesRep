@@ -10,7 +10,7 @@
     "start": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/groqAssistant.test.js",
+    "test": "node --test tests/groqAssistant.test.js tests/conversationStorage.test.js",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },

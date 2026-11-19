@@ -17,13 +17,15 @@ interface ChatMessageItemProps {
   context?: AssistantContext;
   onSelectSuggestion?: (suggestion: string) => void;
   isVoiceEnabled?: boolean;
+  onUpdateMessage: (message: ChatMessage) => void;
 }
 
 export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   message,
   context,
   onSelectSuggestion,
-  isVoiceEnabled
+  isVoiceEnabled,
+  onUpdateMessage
 }) => {
   const isUser = message.sender === 'user' || message.role === 'learner';
   const [isCopied, setIsCopied] = useState(false);
@@ -154,14 +156,20 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           {/* Embedded Quiz if present */}
           {message.quizData && (
             <div className="mt-3 pt-2 border-t border-gray-100">
-              <InteractiveQuiz questions={message.quizData.questions} />
+              <InteractiveQuiz
+                data={message.quizData}
+                onChange={(quizData) => onUpdateMessage({ ...message, quizData })}
+              />
             </div>
           )}
 
           {/* Embedded Challenge if present */}
           {message.challengeData && (
             <div className="mt-3 pt-2 border-t border-gray-100">
-              <PracticalChallenge scenario={message.challengeData.scenario} />
+              <PracticalChallenge
+                data={message.challengeData}
+                onChange={(challengeData) => onUpdateMessage({ ...message, challengeData })}
+              />
             </div>
           )}
 

@@ -11,25 +11,36 @@ import {
   ChevronRight 
 } from 'lucide-react';
 import { AssistantLogo } from './AssistantLogo';
+import { ResponseStyle } from '../../types/assistant';
 
 interface AssistantHeaderProps {
   onCollapse?: () => void;
-  onReset: () => void;
+  onNewConversation: () => void;
   onOpenSettings: () => void;
   isVoiceEnabled: boolean;
   onToggleVoice: () => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  conversations?: { id: string; label: string }[];
+  activeConversationId?: string;
+  onSelectConversation?: (id: string) => void;
+  responseStyle: ResponseStyle;
+  onChangeResponseStyle: (style: ResponseStyle) => void;
 }
 
 export const AssistantHeader: React.FC<AssistantHeaderProps> = ({
   onCollapse,
-  onReset,
+  onNewConversation,
   onOpenSettings,
   isVoiceEnabled,
   onToggleVoice,
   isExpanded = false,
-  onToggleExpand
+  onToggleExpand,
+  conversations = [],
+  activeConversationId,
+  onSelectConversation,
+  responseStyle,
+  onChangeResponseStyle
 }) => {
   return (
     <div id="ai-assistant-header" className="p-3 sm:p-3.5 bg-white border-b border-gray-200 shrink-0">
@@ -63,6 +74,22 @@ export const AssistantHeader: React.FC<AssistantHeaderProps> = ({
           </div>
         </div>
 
+        {conversations.length > 0 && onSelectConversation && (
+          <select
+            aria-label="Conversation history"
+            title="Switch conversation"
+            value={activeConversationId}
+            onChange={(event) => onSelectConversation(event.target.value)}
+            className="min-w-0 max-w-28 sm:max-w-40 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[10px] text-gray-600"
+          >
+            {conversations.map((conversation) => (
+              <option key={conversation.id} value={conversation.id}>
+                {conversation.label}
+              </option>
+            ))}
+          </select>
+        )}
+
         {/* Right: Header controls (🔊 ↻ ⚙ ↗ ✕) */}
         <div className="flex items-center gap-1 shrink-0">
           {/* Audio / Read-aloud toggle */}
@@ -81,10 +108,10 @@ export const AssistantHeader: React.FC<AssistantHeaderProps> = ({
 
           {/* New conversation */}
           <button
-            onClick={onReset}
+            onClick={onNewConversation}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-            title="New conversation"
-            aria-label="New conversation"
+            title="Start a new conversation. Previous conversations are saved."
+            aria-label="Start a new conversation"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -122,6 +149,20 @@ export const AssistantHeader: React.FC<AssistantHeaderProps> = ({
             </button>
           )}
         </div>
+      </div>
+      <div className="mt-2 flex items-center justify-end gap-2">
+        <label htmlFor="header-response-style" className="text-[10px] font-semibold text-gray-500">
+          Explanation depth
+        </label>
+        <select
+          id="header-response-style"
+          value={responseStyle}
+          onChange={(event) => onChangeResponseStyle(event.target.value as ResponseStyle)}
+          className="max-w-40 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] font-medium text-gray-700 focus:border-[#052B66] focus:outline-none focus:ring-2 focus:ring-[#052B66]/15"
+        >
+          <option value="concise">Executive &amp; Concise</option>
+          <option value="detailed">Comprehensive &amp; In-Depth</option>
+        </select>
       </div>
     </div>
   );

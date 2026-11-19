@@ -40,6 +40,12 @@ export interface AiAssistantPanelProps {
    * Controlled message handler (optional)
    */
   onSendMessage?: (query: string, actionType?: QuickActionType, responseStyle?: ResponseStyle, topic?: string) => void;
+  onAppendMessage?: (message: ChatMessage) => void;
+  onUpdateMessage?: (message: ChatMessage) => void;
+  onNewConversation?: () => void;
+  conversations?: { id: string; label: string }[];
+  activeConversationId?: string;
+  onSelectConversation?: (id: string) => void;
 
   /**
    * Whether the panel is being rendered in full screen / mobile drawer
@@ -67,6 +73,7 @@ export interface AiAssistantPanelProps {
   lesson?: any;
   isThinking?: boolean;
   onResetConversation?: () => void;
+  persistenceError?: string | null;
 }
 
 export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
@@ -75,6 +82,12 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   onCollapse,
   messages: externalMessages,
   onSendMessage: externalSendMessage,
+  onAppendMessage: externalAppendMessage,
+  onUpdateMessage: externalUpdateMessage,
+  onNewConversation,
+  conversations,
+  activeConversationId,
+  onSelectConversation,
   isMobileDrawer = false,
   isExpanded = false,
   onToggleExpand,
@@ -83,7 +96,8 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   module,
   lesson,
   isThinking: externalThinking,
-  onResetConversation
+  onResetConversation,
+  persistenceError
 }) => {
   // Derive effective context if legacy props passed
   const activeContext: AssistantContext = context || {
@@ -124,6 +138,28 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
   }, [responseStyle]);
 
   const isControlled = externalMessages !== undefined && externalSendMessage !== undefined;
+  React.useEffect(() => {
+    setActiveTopic('');
+    setLocalPromptMessages([]);
+    const lastMessage = externalMessages?.[externalMessages.length - 1];
+    setPendingTopicAction(
+      lastMessage?.sender === 'assistant'
+      && lastMessage.content.startsWith('What topic would you like me to ')
+        ? lastMessage.actionType || null
+        : null
+    );
+  }, [activeConversationId]);
+
+  const handleUpdateMessage = (updatedMessage: ChatMessage) => {
+    if (isControlled) {
+      externalUpdateMessage?.(updatedMessage);
+    } else {
+      setInternalMessages((previous) =>
+        previous.map((message) => message.id === updatedMessage.id ? updatedMessage : message)
+      );
+    }
+  };
+
   const messages = isControlled
     ? [...externalMessages, ...localPromptMessages]
     : internalMessages;
@@ -209,6 +245,18 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
     }
   };
 
+  const handleNewConversation = () => {
+    setLocalPromptMessages([]);
+    setPendingTopicAction(null);
+    setActiveTopic('');
+    setErrorMessage(null);
+    if (onNewConversation) onNewConversation();
+    else handleResetConversation();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
   const handleActionSelect = (actionType: QuickActionType, promptText?: string) => {
     const hasTopicContext = Boolean(conversationTopic);
     const hasLearnerTopic = messages.some((message) => message.sender === 'user' && message.content.trim());
@@ -227,12 +275,14 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
       const clarification: ChatMessage = {
         id: `topic-prompt-${Date.now()}`,
         sender: 'assistant',
+        actionType,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         content: `What topic would you like me to ${actionLabel[actionType]}? Type the topic below and I’ll get started.`
       };
 
       if (isControlled) {
-        setLocalPromptMessages([clarification]);
+        if (externalAppendMessage) externalAppendMessage(clarification);
+        else setLocalPromptMessages([clarification]);
       } else {
         setInternalMessages((previous) => [...previous, clarification]);
       }
@@ -268,12 +318,17 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
       {/* 1. Header with Controls */}
       <AssistantHeader
         onCollapse={onCollapse}
-        onReset={handleResetConversation}
+        onNewConversation={handleNewConversation}
         onOpenSettings={() => setIsSettingsOpen(true)}
         isVoiceEnabled={isVoiceEnabled}
         onToggleVoice={() => setIsVoiceEnabled(!isVoiceEnabled)}
         isExpanded={isExpanded}
         onToggleExpand={onToggleExpand}
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        onSelectConversation={onSelectConversation}
+        responseStyle={responseStyle}
+        onChangeResponseStyle={setResponseStyle}
       />
 
       {/* 2. Learner Context Badge (Sync indicator) */}
@@ -302,6 +357,12 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
           </div>
         )}
 
+        {persistenceError && (
+          <div role="alert" className="m-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+            Conversation saving failed: {persistenceError} Keep this tab open and copy any unsaved messages.
+          </div>
+        )}
+
         {!hasMessages ? (
           <WelcomeView
             context={activeContext}
@@ -314,6 +375,7 @@ export const AiAssistantPanel: React.FC<AiAssistantPanelProps> = ({
             context={activeContext}
             onSelectSuggestion={(sug) => handleSendMessage(sug, 'general')}
             isVoiceEnabled={isVoiceEnabled}
+            onUpdateMessage={handleUpdateMessage}
           />
         )}
       </div>

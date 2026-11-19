@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -10,49 +9,48 @@ import {
   BrainCircuit 
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { QuizQuestion } from '../../types/assistant';
+import { ChatMessage, QuizQuestion } from '../../types/assistant';
 
 interface InteractiveQuizProps {
-  questions: QuizQuestion[];
+  data: NonNullable<ChatMessage['quizData']>;
+  onChange: (data: NonNullable<ChatMessage['quizData']>) => void;
   onComplete?: (score: number, total: number) => void;
   onRestart?: () => void;
 }
 
 export const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
-  questions,
+  data,
+  onChange,
   onComplete,
   onRestart
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [hasAnswered, setHasAnswered] = useState(false);
-  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
-  const [isFinished, setIsFinished] = useState(false);
+  const { questions, userAnswers } = data;
+  const currentIndex = Math.min(data.currentQuestionIndex, questions.length - 1);
+  const selectedOption = userAnswers[String(currentIndex)] || null;
+  const hasAnswered = Boolean(selectedOption);
+  const isFinished = data.isSubmitted;
 
   const currentQ = questions[currentIndex] || questions[0];
   const total = questions.length;
+  if (!currentQ) return null;
   const isCorrect = selectedOption === currentQ.correctAnswerId;
 
   const handleSelectOption = (optionId: string) => {
     if (hasAnswered) return;
-    setSelectedOption(optionId);
-    setHasAnswered(true);
-    setUserAnswers((prev) => ({
-      ...prev,
-      [currentIndex]: optionId
-    }));
+    onChange({
+      ...data,
+      userAnswers: { ...userAnswers, [String(currentIndex)]: optionId }
+    });
   };
 
   const handleNextQuestion = () => {
     if (currentIndex + 1 < total) {
-      setCurrentIndex(currentIndex + 1);
-      setSelectedOption(null);
-      setHasAnswered(false);
+      onChange({ ...data, currentQuestionIndex: currentIndex + 1 });
     } else {
-      setIsFinished(true);
-      const score = Object.entries({ ...userAnswers, [currentIndex]: selectedOption || '' }).filter(
+      const score = Object.entries(userAnswers).filter(
         ([idx, ans]) => ans === questions[Number(idx)]?.correctAnswerId
       ).length;
+      onChange({ ...data, isSubmitted: true, score });
       
       if (score >= Math.ceil(total * 0.7)) {
         confetti({
@@ -67,16 +65,18 @@ export const InteractiveQuiz: React.FC<InteractiveQuizProps> = ({
   };
 
   const handleReset = () => {
-    setCurrentIndex(0);
-    setSelectedOption(null);
-    setHasAnswered(false);
-    setUserAnswers({});
-    setIsFinished(false);
+    onChange({
+      ...data,
+      currentQuestionIndex: 0,
+      userAnswers: {},
+      isSubmitted: false,
+      score: undefined
+    });
     if (onRestart) onRestart();
   };
 
   const calculateFinalScore = () => {
-    return Object.entries(userAnswers).filter(
+    return data.score ?? Object.entries(userAnswers).filter(
       ([idx, ans]) => ans === questions[Number(idx)]?.correctAnswerId
     ).length;
   };

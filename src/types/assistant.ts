@@ -84,7 +84,7 @@ export interface ChatMessage {
     scenario: ChallengeScenario;
     userSubmission?: string;
     evaluation?: ChallengeEvaluation;
-    isEvaluating?: boolean;
+    evaluationError?: string;
   };
   challengeEvaluation?: ChallengeEvaluation;
   isError?: boolean;
